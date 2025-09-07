@@ -1,0 +1,23 @@
+name: oblivionx
+description: "SIH 2025 prototype for AI-based Drop-out Prediction and Counseling System."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.3 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.1
+  provider: ^6.1.2
+  flutter_secure_storage: ^9.0.0
+  jwt_decoder: ^2.0.1 # Replaced jwt_decode with this
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
