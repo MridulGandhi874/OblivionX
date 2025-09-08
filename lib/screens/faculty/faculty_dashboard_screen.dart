@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_provider.dart';
-import '../../models/student_model.dart';
+import '../../models/profiles/student_profile.dart'; // ✅ FIXED: Correct import path
 
 class FacultyDashboardScreen extends StatefulWidget {
   const FacultyDashboardScreen({super.key});
@@ -17,7 +17,6 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    // Fetch all student data when the screen is first loaded
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<StudentProvider>(context, listen: false).fetchAllStudents();
     });
@@ -65,8 +64,8 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
       );
     }
 
-    // Sort students to show High Risk first
-    List<Student> sortedStudents = List.from(provider.students);
+    // ✅ FIXED: Using the correct 'StudentProfile' class
+    List<StudentProfile> sortedStudents = List.from(provider.students);
     sortedStudents.sort((a, b) {
       const ordering = {'High Risk': 0, 'Medium Risk': 1, 'Low Risk': 2};
       return (ordering[a.riskStatus] ?? 3).compareTo(ordering[b.riskStatus] ?? 3);
@@ -75,7 +74,9 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
     return ListView.builder(
       itemCount: sortedStudents.length,
       itemBuilder: (context, index) {
+        // ✅ FIXED: Using the correct 'StudentProfile' class
         final student = sortedStudents[index];
+        final isUnpaid = student.financialStatus == 'Unpaid';
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           child: ListTile(
@@ -85,17 +86,19 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen> {
               child: Text(student.name[0], style: const TextStyle(color: Colors.white)),
             ),
             title: Text(student.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text("ID: ${student.studentId} | Attendance: ${student.attendancePercentage.toStringAsFixed(1)}%"),
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: student.riskColor,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                student.riskStatus,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              ),
+            subtitle: Row(
+              children: [
+                Text("ID: ${student.studentId}"),
+                if (isUnpaid) ...[
+                  const SizedBox(width: 8),
+                  const Icon(Icons.error_outline, color: Colors.red, size: 16),
+                  const Text(" Unpaid", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                ]
+              ],
+            ),
+            trailing: Text(
+              student.riskStatus,
+              style: TextStyle(color: student.riskColor, fontWeight: FontWeight.bold),
             ),
           ),
         );

@@ -15,6 +15,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -26,26 +27,24 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _submit() async {
     if (_formKey.currentState!.validate()) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      await authProvider.login(
+
+      // The login method now returns true on success and false on failure
+      final bool success = await authProvider.login(
         _usernameController.text,
         _passwordController.text,
       );
 
-      // After attempting login, check if there's an error message to display
-      if (mounted && authProvider.authState == AuthState.error) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(authProvider.errorMessage ?? "An unknown error occurred."),
-            backgroundColor: Colors.red,
-          ),
-        );
+      if (!success && mounted) {
+        setState(() {
+          _errorMessage = "Login failed. Please check credentials.";
+        });
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
+    final authState = Provider.of<AuthProvider>(context).authState;
 
     return Scaffold(
       backgroundColor: Colors.indigo[900],
@@ -70,57 +69,29 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
+                    if (_errorMessage != null) ...[
+                      Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                      const SizedBox(height: 16),
+                    ],
                     TextFormField(
                       controller: _usernameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Username (Email)',
-                        prefixIcon: Icon(Icons.person_outline),
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter your username';
-                        }
-                        return null;
-                      },
+                      decoration: const InputDecoration(labelText: 'Username (Email)'),
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _passwordController,
-                      decoration: const InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: Icon(Icons.lock_outline),
-                        border: OutlineInputBorder(),
-                      ),
+                      decoration: const InputDecoration(labelText: 'Password'),
                       obscureText: true,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter your password';
-                        }
-                        return null;
-                      },
                     ),
                     const SizedBox(height: 24),
                     SizedBox(
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.indigo,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        onPressed: authProvider.authState == AuthState.authenticating
-                            ? null // Disable button while loading
-                            : _submit,
-                        child: authProvider.authState == AuthState.authenticating
+                        onPressed: authState == AuthState.authenticating ? null : _submit,
+                        child: authState == AuthState.authenticating
                             ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text(
-                          'Login',
-                          style: TextStyle(fontSize: 18),
-                        ),
+                            : const Text('Login', style: TextStyle(fontSize: 18)),
                       ),
                     ),
                   ],

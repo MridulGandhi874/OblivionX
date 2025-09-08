@@ -1,22 +1,22 @@
 // lib/providers/student_provider.dart
 
 import 'package:flutter/material.dart';
-import '../models/student_model.dart';
+import '../models/profiles/student_profile.dart';
 import '../services/api_service.dart';
 
 class StudentProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
-  List<Student> _students = [];
-  Student? _currentStudent;
+  List<StudentProfile> _students = []; // For faculty view
+  StudentProfile? _currentStudent; // For student view
   bool _isLoading = false;
   String? _errorMessage;
 
-  List<Student> get students => _students;
-  Student? get currentStudent => _currentStudent;
+  List<StudentProfile> get students => _students;
+  StudentProfile? get currentStudent => _currentStudent;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  // For Faculty/Admin: Fetches all students
+  // For Faculty/Counselor: Fetches all students
   Future<void> fetchAllStudents() async {
     _isLoading = true;
     _errorMessage = null;
@@ -25,7 +25,6 @@ class StudentProvider with ChangeNotifier {
       _students = await _apiService.getAllStudents();
     } catch (e) {
       _errorMessage = "Failed to load student data.";
-      print(e);
     }
     _isLoading = false;
     notifyListeners();
@@ -40,17 +39,14 @@ class StudentProvider with ChangeNotifier {
       _currentStudent = await _apiService.getMyStudentData();
     } catch (e) {
       _errorMessage = "Failed to load your personal data.";
-      print(e);
     }
     _isLoading = false;
     notifyListeners();
   }
 
-  // Called when logging out to clear data
   void clearData() {
     _students = [];
     _currentStudent = null;
-    _errorMessage = null;
     notifyListeners();
   }
 }

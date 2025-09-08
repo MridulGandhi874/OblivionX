@@ -1,26 +1,31 @@
+// lib/models/profiles/student_profile.dart
+
 import 'package:flutter/material.dart';
 
-class Student {
+class StudentProfile {
   final String studentId;
   final String name;
-  double attendancePercentage;
+  final double attendancePercentage;
   final double latestGrade;
-  String riskStatus;
+  final String financialStatus;
+  final String riskStatus;
 
-  Student({
+  StudentProfile({
     required this.studentId,
     required this.name,
     required this.attendancePercentage,
     required this.latestGrade,
+    required this.financialStatus,
     required this.riskStatus,
   });
 
-  factory Student.fromJson(Map<String, dynamic> json) {
-    return Student(
+  factory StudentProfile.fromJson(Map<String, dynamic> json) {
+    return StudentProfile(
       studentId: json['student_id'],
       name: json['name'],
       attendancePercentage: (json['attendance_percentage'] as num).toDouble(),
       latestGrade: (json['latest_grade'] as num).toDouble(),
+      financialStatus: json['financial_status'],
       riskStatus: json['risk_status'],
     );
   }

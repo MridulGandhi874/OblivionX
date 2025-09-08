@@ -6,7 +6,7 @@ import '../services/secure_storage_service.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 
 enum AuthState {
-  unauthenticated, // Simplified initial state
+  unauthenticated,
   authenticated,
   authenticating,
   error
@@ -17,7 +17,7 @@ class AuthProvider with ChangeNotifier {
   final SecureStorageService _storageService = SecureStorageService();
 
   // --- THIS IS THE FIX ---
-  // The app now starts in the 'unauthenticated' state by default.
+  // The state now correctly uses 'AuthState.unauthenticated'
   AuthState _authState = AuthState.unauthenticated;
   String? _token;
   String? _errorMessage;

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_provider.dart';
-import '../../models/student_model.dart';
+import '../../models/profiles/student_profile.dart'; // ✅ FIXED: Correct import path
 
 class StudentDashboardScreen extends StatefulWidget {
   const StudentDashboardScreen({super.key});
@@ -17,7 +17,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    // Use addPostFrameCallback to fetch data after the widget is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<StudentProvider>(context, listen: false).fetchMyData();
     });
@@ -27,7 +26,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   Widget build(BuildContext context) {
     final studentProvider = Provider.of<StudentProvider>(context);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final Student? student = studentProvider.currentStudent;
+    // ✅ FIXED: Using the correct 'StudentProfile' class
+    final StudentProfile? student = studentProvider.currentStudent;
 
     return Scaffold(
       appBar: AppBar(
@@ -37,7 +37,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () {
-              // Clear student data before logging out
               studentProvider.clearData();
               authProvider.logout();
             },
@@ -54,15 +53,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  Widget _buildBody(StudentProvider provider, Student? student) {
+  // ✅ FIXED: Using the correct 'StudentProfile' class
+  Widget _buildBody(StudentProvider provider, StudentProfile? student) {
     if (provider.isLoading) {
       return const CircularProgressIndicator();
     }
-
     if (provider.errorMessage != null) {
       return Text("Error: ${provider.errorMessage}");
     }
-
     if (student == null) {
       return const Text("No personal data found.");
     }
@@ -79,7 +77,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  Widget _buildHeader(Student student) {
+  // ✅ FIXED: Using the correct 'StudentProfile' class
+  Widget _buildHeader(StudentProfile student) {
     return Column(
       children: [
         CircleAvatar(
@@ -111,7 +110,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  Widget _buildInfoCard(Student student) {
+  // ✅ FIXED: Using the correct 'StudentProfile' class
+  Widget _buildInfoCard(StudentProfile student) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20.0),
@@ -133,6 +133,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               value: "${student.latestGrade.toStringAsFixed(1)} / 100",
               color: Colors.purple.shade700,
             ),
+            const SizedBox(height: 16),
+            _buildInfoRow(
+              icon: Icons.attach_money,
+              label: "Financial Status",
+              value: student.financialStatus,
+              color: student.financialStatus == 'Paid' ? Colors.green.shade700 : Colors.red.shade700,
+            ),
           ],
         ),
       ),
@@ -146,7 +153,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         const SizedBox(width: 16),
         Text(label, style: const TextStyle(fontSize: 16)),
         const Spacer(),
-        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
       ],
     );
   }
