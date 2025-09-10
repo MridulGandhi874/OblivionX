@@ -4,11 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/student_provider.dart';
+import 'providers/admin_provider.dart';
+import 'providers/faculty_provider.dart';
+import 'providers/counselor_provider.dart'; // ✅ Corrected: Import CounselorProvider
+
 import 'screens/login_screen.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/student/student_dashboard_screen.dart';
-import 'providers/admin_provider.dart';
 import 'screens/faculty/faculty_dashboard_screen.dart';
+import 'screens/counselor/counselor_dashboard_screen.dart';
 
 void main() {
   runApp(
@@ -17,6 +21,8 @@ void main() {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => StudentProvider()),
         ChangeNotifierProvider(create: (_) => AdminProvider()),
+        ChangeNotifierProvider(create: (_) => FacultyProvider()),
+        ChangeNotifierProvider(create: (_) => CounselorProvider()), // ✅ Corrected: Added CounselorProvider
       ],
       child: const OblivionXApp(),
     ),
@@ -51,24 +57,31 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AuthProvider>(
-      builder: (context, authProvider, child) {
-        if (authProvider.authState == AuthState.authenticated) {
-          switch (authProvider.userRole) {
-            case 'admin':
-              return const AdminDashboardScreen();
-            case 'student':
-              return const StudentDashboardScreen();
-            case 'faculty':
-            case 'counselor':
-              return const FacultyDashboardScreen();
-            default:
-              return const LoginScreen();
-          }
-        } else {
-          return const LoginScreen();
+    final authProvider = Provider.of<AuthProvider>(context);
+
+    switch (authProvider.authState) {
+      case AuthState.authenticating:
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
+      case AuthState.authenticated:
+      // This logic now correctly routes all four user roles
+        switch (authProvider.userRole) {
+          case 'admin':
+            return const AdminDashboardScreen();
+          case 'student':
+            return const StudentDashboardScreen();
+          case 'faculty':
+            return const FacultyDashboardScreen();
+          case 'counselor':
+            return const CounselorDashboardScreen();
+          default:
+            return const LoginScreen(); // Fallback for safety
         }
-      },
-    );
+
+      case AuthState.unauthenticated:
+      case AuthState.error:
+      default:
+        return const LoginScreen();
+    }
   }
 }

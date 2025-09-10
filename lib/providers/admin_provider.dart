@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import '../models/profiles/student_profile.dart';
 import '../models/profiles/faculty_profile.dart';
 import '../models/profiles/counselor_profile.dart';
+import '../models/class_profile.dart';
 
 class AdminProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
@@ -12,6 +13,7 @@ class AdminProvider with ChangeNotifier {
   List<StudentProfile> _students = [];
   List<FacultyProfile> _faculty = [];
   List<CounselorProfile> _counselors = [];
+  List<ClassProfile> _classes = [];
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -19,6 +21,7 @@ class AdminProvider with ChangeNotifier {
   List<StudentProfile> get students => _students;
   List<FacultyProfile> get faculty => _faculty;
   List<CounselorProfile> get counselors => _counselors;
+  List<ClassProfile> get classes => _classes;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
@@ -28,27 +31,43 @@ class AdminProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      // --- THIS IS THE DEBUGGING BLOCK ---
-      // We will fetch each list one by one to find the error.
+      final results = await Future.wait([
+        _apiService.getAllStudents(),
+        _apiService.getAllFaculty(),
+        _apiService.getAllCounselors(),
+        _apiService.getAllClasses(),
+      ]);
 
-      print("Step 1: Fetching students...");
-      _students = await _apiService.getAllStudents();
-      print("✅ Success: Fetched ${_students.length} students.");
-
-      print("Step 2: Fetching faculty...");
-      _faculty = await _apiService.getAllFaculty();
-      print("✅ Success: Fetched ${_faculty.length} faculty members.");
-
-      print("Step 3: Fetching counselors...");
-      _counselors = await _apiService.getAllCounselors();
-      print("✅ Success: Fetched ${_counselors.length} counselors.");
+      _students = results[0] as List<StudentProfile>;
+      _faculty = results[1] as List<FacultyProfile>;
+      _counselors = results[2] as List<CounselorProfile>;
+      _classes = results[3] as List<ClassProfile>;
 
     } catch (e) {
-      // This will now print a much more specific error.
       _errorMessage = "Failed to load dashboard data. Please try again.";
-      print("🔥 AN ERROR OCCURRED: $e"); // This is the crucial line
+      print(e);
     }
 
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  // Admin can update student financial status
+  Future<void> updateStudentFinancialStatus(String studentId, String newStatus) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final updatedStudent = await _apiService.updateFinancialStatus(studentId, newStatus);
+      // Find and replace the updated student in the list
+      int index = _students.indexWhere((s) => s.studentId == studentId);
+      if (index != -1) {
+        _students[index] = updatedStudent;
+      }
+    } catch (e) {
+      _errorMessage = "Failed to update financial status: $e";
+      print(e);
+    }
     _isLoading = false;
     notifyListeners();
   }
@@ -57,6 +76,8 @@ class AdminProvider with ChangeNotifier {
     _students = [];
     _faculty = [];
     _counselors = [];
+    _classes = [];
+    _errorMessage = null; // Clear error message too
     notifyListeners();
   }
 }
