@@ -11,6 +11,9 @@ from datetime import datetime, timedelta
 import uvicorn
 from contextlib import asynccontextmanager
 from enum import Enum
+import qrcode
+import base64
+from io import BytesIO
 import uuid
 
 # --- Configuration ---
@@ -30,6 +33,18 @@ class SessionStatus(str, Enum):
     open = "Open"
     closed = "Closed"
 
+# --- Models ---
+class QRSessionCreate(BaseModel):
+    class_id: str
+    duration_minutes: int = 5  # QR validity duration
+
+
+class AttendanceRecord(BaseModel):
+    student_id: str
+    class_id: str
+    session_id: str
+    timestamp: datetime
+    status: str
 
 # --- Lifespan & App Initialization ---
 @asynccontextmanager
@@ -58,6 +73,9 @@ classes_collection = db.classes
 sessions_collection = db.counseling_sessions
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+# --- Attendance Collection ---
+attendance_collection = db.attendance
+qr_sessions_collection = db.qr_sessions
 
 
 # --- Security Helper Functions ---
@@ -214,14 +232,30 @@ def _create_user_entry(username, password, role):
 
 @app.post("/admin/create_student", status_code=status.HTTP_201_CREATED, tags=["Admin - User Management"])
 async def create_student(data: StudentCreate, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] != 'admin': raise HTTPException(status_code=403, detail="Not authorized")
+    if current_user["role"] != 'admin':
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Create user in users collection
     _create_user_entry(data.username, data.password, "student")
-    if students_collection.find_one({"student_id": data.student_id}): raise HTTPException(status_code=400,
-                                                                                          detail=f"Student ID '{data.student_id}' already exists.")
+
+    # Check for duplicate student_id
+    if students_collection.find_one({"student_id": data.student_id}):
+        raise HTTPException(status_code=400, detail=f"Student ID '{data.student_id}' already exists.")
+
+    # Calculate risk
     risk = calculate_risk_status(data.initial_attendance, data.initial_grade, data.financial_status)
-    students_collection.insert_one(
-        {"student_id": data.student_id, "name": data.name, "attendance_percentage": data.initial_attendance,
-         "latest_grade": data.initial_grade, "financial_status": data.financial_status.value, "risk_status": risk})
+
+    # Insert student with username included
+    students_collection.insert_one({
+        "student_id": data.student_id,
+        "username": data.username,   # ✅ Add username field
+        "name": data.name,
+        "attendance_percentage": data.initial_attendance,
+        "latest_grade": data.initial_grade,
+        "financial_status": data.financial_status.value,
+        "risk_status": risk
+    })
+
     return {"message": "Student created successfully"}
 
 
@@ -352,10 +386,17 @@ async def get_all_students(current_user: dict = Depends(get_current_user)):
 
 @app.get("/students/me", response_model=StudentModel, tags=["Students"])
 async def get_my_data(current_user: dict = Depends(get_current_user)):
-    if current_user["role"] != 'student': raise HTTPException(status_code=403, detail="Not authorized")
-    student_data = students_collection.find_one({"student_id": current_user["username"]}, {"_id": 0})
-    if not student_data: raise HTTPException(status_code=404, detail="Student data not found")
+    if current_user["role"] != 'student':
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Query by username instead of student_id
+    student_data = students_collection.find_one({"username": current_user["username"]}, {"_id": 0})
+
+    if not student_data:
+        raise HTTPException(status_code=404, detail="Student data not found")
+
     return student_data
+
 
 
 @app.post("/sessions", response_model=SessionModel, status_code=status.HTTP_201_CREATED, tags=["Counseling"])
@@ -389,6 +430,92 @@ async def update_session(session_id: str, session_update: SessionUpdate,
     if result.matched_count == 0: raise HTTPException(status_code=404, detail="Session not found")
     return sessions_collection.find_one({"session_id": session_id}, {"_id": 0})
 
+@app.post("/faculty/classes/{class_id}/generate_qr_image", tags=["QR Attendance"])
+async def generate_qr_image(class_id: str, qr_data: QRSessionCreate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "faculty":
+        raise HTTPException(status_code=403, detail="Only faculty can generate QR codes")
+
+    # Check class ownership
+    target_class = classes_collection.find_one({"class_id": class_id})
+    if not target_class or target_class["faculty_id"] != current_user["username"]:
+        raise HTTPException(status_code=403, detail="You are not assigned to this class")
+
+    session_id = str(uuid.uuid4())
+    expiry_time = datetime.utcnow() + timedelta(minutes=qr_data.duration_minutes)
+
+    qr_payload = {
+        "session_id": session_id,
+        "class_id": class_id,
+        "faculty_id": current_user["username"],
+        "expires_at": expiry_time
+    }
+    qr_sessions_collection.insert_one(qr_payload)
+
+    # String embedded in QR
+    qr_string = f"{session_id}:{class_id}"
+
+    # Generate QR image
+    qr = qrcode.QRCode(version=1, box_size=10, border=4)
+    qr.add_data(qr_string)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="black", back_color="white")
+
+    # Convert image to Base64
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    qr_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+    return {
+        "qr_string": qr_string,
+        "expires_at": expiry_time,
+        "qr_image_base64": qr_base64
+    }
+
+@app.post("/students/scan_qr/{qr_string}", tags=["QR Attendance"])
+async def scan_qr(qr_string: str, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "student":
+        raise HTTPException(status_code=403, detail="Only students can scan QR codes")
+
+    try:
+        session_id, class_id = qr_string.split(":")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid QR format")
+
+    qr_session = qr_sessions_collection.find_one({"session_id": session_id, "class_id": class_id})
+    if not qr_session:
+        raise HTTPException(status_code=404, detail="QR session not found")
+
+    if datetime.utcnow() > qr_session["expires_at"]:
+        raise HTTPException(status_code=410, detail="QR code expired")
+
+    # Check if student belongs to this class
+    target_class = classes_collection.find_one({"class_id": class_id})
+    if not target_class or current_user["username"] not in target_class.get("student_ids", []):
+        raise HTTPException(status_code=403, detail="You are not enrolled in this class")
+
+    # Prevent duplicate attendance
+    if attendance_collection.find_one({"student_id": current_user["username"], "session_id": session_id}):
+        return {"message": "Attendance already marked"}
+
+    attendance_record = {
+        "student_id": current_user["username"],
+        "class_id": class_id,
+        "session_id": session_id,
+        "timestamp": datetime.utcnow(),
+        "status": "Present"
+    }
+    attendance_collection.insert_one(attendance_record)
+
+    return {"message": "Attendance marked successfully"}
+
+@app.get("/faculty/classes/{class_id}/attendance/{session_id}", tags=["QR Attendance"])
+async def get_attendance(class_id: str, session_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "faculty":
+        raise HTTPException(status_code=403, detail="Only faculty can view attendance")
+
+    records = list(attendance_collection.find({"class_id": class_id, "session_id": session_id}, {"_id": 0}))
+    return records
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

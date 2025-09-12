@@ -8,7 +8,7 @@ import '../models/profiles/counselor_profile.dart';
 import '../models/class_profile.dart';
 import '../models/counseling_session.dart';
 
-const String _baseUrl = 'http://10.0.2.2:8000'; // Adjust as needed for your setup
+const String _baseUrl = 'http://10.106.55.237:8000'; // Adjust as needed for your setup
 
 // Pydantic-like models... (rest of your models remain unchanged)
 class LoginRequest {
